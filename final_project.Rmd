@@ -1,0 +1,136 @@
+---
+title: "Final Project - Lights and Sirens Data"
+author: "Caitlin Fletcher"
+date: "2022-10-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+```
+
+Introduction
+  
+  It is well-known that the usage of lights and sirens on emergency vehicles has the ability to reduce a crew's response time to a scene of an emergency. Studies from data collected by NEMSIS (National EMS Information System) have found that the usage of lights and sirens can reduce response times from 42 seconds to 3.8 minutes (1, 2). However, many inherent risks are present when an emergency vehicle is responding to an emergency and/or transporting a patient using lights and sirens. A lights and sirens response increases the chance of an EMS vehicle crash by 50% and approximately triples the chance of crash during patient transport (1, 2). Studies have also shown that for every crash involving an EMS vehicle, four crashes surrounding the vehicle occur, known as "wake crashes" (3). Consequences of crashes can include potential for injury to EMS personnel, injury to patient(s) being transported, and further injuries to other drivers/pedestrians involved (2). Additionally, crashes can have detrimental effects on an emergency medical service's organization, including the public's opinion on the service as well as the well-being of those employed by the service (2). Furthermore, lights and sirens usage still continues to be used in 74% of responses and 26.1% of transports with a patient in the vehicle (4). 
+  
+  Despite the widespread usage of lights and sirens, potentially lifesaving interventions were performed in only approximately 7% of these calls (5). Thus, there are systems put in place by emergency medical organizations to reduce lights and sirens usage based on different metrics. A popular metric is using emergency medical dispatch codes, or determinants (2). These determinants are provided by 911 dispatch to notify responding personnel of the call severity based on protocols developed by the dispatch facility. 
+
+Methods
+
+  The data analyzed in this report originates from call data spanning February 2016 - October 2022 from McGregor Memorial EMS. The data is imported from TEMSIS Elite, also known as Trauma Emergency Medical Services Information System. TEMSIS is the statewide New Hampshire web-based information system used by Emergency Medical Services (EMS) to record, store, and import call or "run" data. Some of the data in these run reports includes: call times, geographic location, call determinants (dispatch provided to inform providers of the apparent severity of a given call), transport method, reason for call, EMS interventions, working patient diagnosis, patient status (severity of patient illness or injury based on EMS provider assessment). 
+  
+  This data can be used to create a variety of analyses, one of particular interest as previously discussed includes the usage of lights and sirens based on the call determinant provided by dispatch.
+
+
+```{r data cleaning}
+data <- read.csv("C:\\Users\\caitl\\Documents\\BIOL 806\\call_data.csv", header = TRUE, stringsAsFactors = TRUE)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+library(ggplot2)
+
+#Remove incomplete data
+data <- data[!apply(is.na(data) | data == "", 1, any),]
+
+
+#Renaming columns
+colnames(data)[1] <- "Date_Time"
+colnames(data)[2] <- "Determinant"
+colnames(data)[3] <- "Dispatch_Reason"
+colnames(data)[4] <- "Response"
+colnames(data)[5] <- "Diagnosis"
+colnames(data)[6] <- "Patient_Status"
+colnames(data)[7] <- "Procedures"
+colnames(data)[8] <- "Medications"
+
+#Splitting date_time column into separate columns
+data[c('Date', 'Time')] <- str_split_fixed(data$Date_Time, ' ', 2)
+
+#Remove time and combined date/time columns
+data <- subset (data, select = -Date_Time)
+data <- subset (data, select = -Time)
+
+data$Date1 <- as.Date(data$Date, format="%m/%d/%Y")
+
+data$Date <- format(data$Date1, "%h-%Y")  
+
+data$Year <- format(data$Date1, "%Y")
+
+data <- subset (data, select = -Date1)
+
+#Changing type for response and determinant column
+data$Response <- as.character(data$Response)
+data$Determinant <- as.character(data$Determinant)
+data$Dispatch_Reason <- as.character(data$Dispatch_Reason)
+
+#Cleaning up data in response column 
+for(i in 1:nrow(data)){
+  if(data$Response[i] == "''Lights and Sirens''") {
+    data$Response[i] <- 'LS'
+  }
+    else if(data$Response[i] == "''No Lights or Sirens''") {
+    data$Response[i] <- 'No LS'
+    }
+  else {data$Response[i] <- NA}
+}
+
+#Shortening Not applicable to NA
+for(i in 1:nrow(data)){
+  if(data$Determinant[i] == "Not Available / Not Applicable") {
+    data$Determinant[i] <- 'N/A'
+  }
+}
+
+for(i in 1:nrow(data)){
+  if(data$Dispatch_Reason[i] == "Allergic Reaction / Stings / Bites (2)") {
+    data$Dispatch_Reason[i] <- "Allergic Reaction (2)"
+  }
+}
+data <- drop_na(data)
+
+
+target <- c("Unconscious / Syncope (31)", "Allergic Reaction (2)", "Breathing Problems (6)", "Altered Mental Status (26)", "Seizure (12)")
+
+target_data <- filter(data, Dispatch_Reason %in% target) 
+View(target_data)
+
+
+```
+
+Results
+
+```{r figures}
+
+ggplot(data = data, aes(x = Response, fill = Determinant)) +
+    geom_bar(position="fill") + labs(y="Proportion of Calls", x="Response Type", title="Proportion of Total Call Responses by Determinant Since 2016", caption = "Note: LS = Lights and Sirens")+ theme(plot.caption = element_text(face = "italic", hjust=1.2))
+
+ggplot(data = data, aes(x = Response, fill = Determinant)) +
+    geom_bar(position="fill") + facet_wrap(~ Year) + theme(legend.title = element_text(size = 6), legend.text = element_text(size = 6), plot.caption = element_text(face = "italic", hjust=1.2))+ labs(y="Proportion of Calls", x="Response Type", title="Yearly Proportion of Call Determinants by Response", caption = "Note: LS = Lights and Sirens") 
+
+
+ggplot(data = data, aes(x = Determinant, fill = Response)) + facet_wrap(~Year) +
+geom_bar(position="fill") + labs(y="Proportion of Calls", title=" Yearly Proportion of Total Call Responses by Determinant", caption = "Note: LS = Lights and Sirens")+ theme(axis.text=element_text(size=6),axis.title=element_text(size=9), axis.text.x = element_text(angle = 45), plot.caption = element_text(face = "italic", hjust=1.2))
+
+ggplot(data = target_data, aes(x = Determinant, fill = Response)) + facet_grid(Year~Dispatch_Reason) +
+geom_bar(position="fill") + labs(y="Proportion of Calls", title=" Yearly Proportion of Total Call Responses by Determinant", caption = "Note: LS = Lights and Sirens")+ theme(axis.text=element_text(size=6),axis.title=element_text(size=9), axis.text.x = element_text(angle = 90), strip.text.x = element_text(size = 5), strip.text.y = element_text(size = 6), plot.caption = element_text(face = "italic", hjust=1.2))
+
+
+
+```
+
+Discussion
+
+
+
+Bibliography
+
+(1) Watanabe, B. L., Patterson, G. S., Kempema, J. M., Magallanes, O., & Brown, L. H. (2019). Is use of warning lights and sirens associated with increased risk of ambulance crashes? A contemporary analysis using National EMS Information System (NEMSIS) data. Annals of emergency medicine, 74(1), 101-109.
+
+(2) Kupas, D. F., Zavadsky, M., Burton, B., Baird, S., Clawson, J. J., Decker, C., ... & Wilson, B. R. (2022). Joint Statement on Lights & Siren Vehicle Operations on Emergency Medical Services Responses. Prehospital Emergency Care, (just-accepted), 1-5.
+
+(3) Clawson, J. J., Martin, R. L., Cady, G. A., & Maio, R. F. (1997). The wake-effect—emergency vehicle-related collisions. Prehospital and disaster medicine, 12(4), 41-44.
+
+(4) Kupas DF. Lights and siren use by emergency medical services: Above all, do no harm. National Highway Traffic Safety Administration; 2017. https://www.ems. gov/pdf/Lights_and_Sirens_Use_by_EMS_May_2017.pdf.
+
+(5) Jarvis, J. L., Hamilton, V., Taigman, M., & Brown, L. H. (2021). Using red lights and sirens for emergency ambulance response: how often are potentially life-saving interventions performed?. Prehospital emergency care, 25(4), 549-555.
